@@ -1,0 +1,846 @@
+-- ============================================================
+--  VortexUnion UI Library  v3.0
+-- ============================================================
+local Players      = game:GetService("Players")
+local UIS          = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService   = game:GetService("RunService")
+local TextService  = game:GetService("TextService")
+
+local CFG = {
+    Main      = Color3.fromRGB(9,  9,  16),
+    Secondary = Color3.fromRGB(20, 17, 30),
+    Panel     = Color3.fromRGB(14, 12, 23),
+    Accent    = Color3.fromRGB(180,160,255),
+    Text      = Color3.fromRGB(215,215,215),
+    TextDim   = Color3.fromRGB(115,110,135),
+    Stroke    = Color3.fromRGB(55, 45, 85),
+    Font      = Enum.Font.Code,
+    W=610, H=455,
+}
+
+local Library = {Flags={}, _tabs={}, _dead=false, MenuKey=Enum.KeyCode.Insert}
+
+-- ── helpers ──────────────────────────────────────────────
+local function New(cls, props, kids)
+    local o = Instance.new(cls)
+    for k,v in pairs(props or {}) do o[k]=v end
+    for _,c in pairs(kids  or {}) do c.Parent=o end
+    return o
+end
+local function Tw(obj, goal, t, sty, dir)
+    TweenService:Create(obj, TweenInfo.new(t or .18,
+        sty or Enum.EasingStyle.Quad,
+        dir or Enum.EasingDirection.Out), goal):Play()
+end
+local function GTS(t,s,f)
+    return TextService:GetTextSize(t,s,f,Vector2.new(9999,9999))
+end
+
+-- ── ScreenGui ────────────────────────────────────────────
+local SG = New("ScreenGui",{
+    Name="VortexUnionUI",
+    Parent=game:GetService("CoreGui"),
+    ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
+    ResetOnSpawn=false, IgnoreGuiInset=true,
+})
+local UIScale = New("UIScale",{Parent=SG, Scale=1})
+local function RefreshScale()
+    local vp = workspace.CurrentCamera.ViewportSize
+    UIScale.Scale = math.max(math.min((vp.X-40)/CFG.W,(vp.Y-40)/CFG.H,1), 0.5)
+end
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(RefreshScale)
+RefreshScale()
+
+-- ── Notifications ─────────────────────────────────────────
+local NotifHolder = New("Frame",{
+    Parent=SG, BackgroundTransparency=1,
+    Position=UDim2.new(1,-14,0,14),
+    AnchorPoint=Vector2.new(1,0),
+    Size=UDim2.new(0,320,1,0), ZIndex=400,
+})
+New("UIListLayout",{
+    Parent=NotifHolder, Padding=UDim.new(0,7),
+    HorizontalAlignment=Enum.HorizontalAlignment.Right,
+    VerticalAlignment=Enum.VerticalAlignment.Top,
+})
+
+function Library:Notify(msg, kind)
+    local col = kind=="success" and Color3.fromRGB(90,255,130)
+             or kind=="error"   and Color3.fromRGB(255,75,75)
+             or CFG.Accent
+    local f = New("Frame",{
+        Parent=NotifHolder,
+        Size=UDim2.new(0,0,0,48),
+        BackgroundColor3=CFG.Panel, BorderSizePixel=0,
+        ClipsDescendants=true,
+    },{
+        New("UICorner",{CornerRadius=UDim.new(0,6)}),
+        New("UIStroke",{Color=col,Thickness=1,Transparency=0.35}),
+        New("Frame",{
+            Size=UDim2.new(0,3,1,0),
+            BackgroundColor3=col,
+        },{New("UICorner",{CornerRadius=UDim.new(0,3)})}),
+        New("TextLabel",{
+            Text=msg, TextColor3=CFG.Text,
+            Font=CFG.Font, TextSize=14,
+            Size=UDim2.new(1,-16,1,0),
+            Position=UDim2.new(0,13,0,0),
+            BackgroundTransparency=1,
+            TextXAlignment=Enum.TextXAlignment.Left,
+            TextWrapped=true,
+        }),
+    })
+    Tw(f,{Size=UDim2.new(0,305,0,52)},0.42,Enum.EasingStyle.Back)
+    task.delay(4,function()
+        Tw(f,{Size=UDim2.new(0,0,0,0),BackgroundTransparency=1},0.3)
+        task.wait(0.35) f:Destroy()
+    end)
+end
+
+-- ── Tooltip ──────────────────────────────────────────────
+local TipLbl = New("TextLabel",{
+    Parent=SG, Visible=false, ZIndex=500,
+    BackgroundColor3=CFG.Secondary, TextColor3=CFG.Text,
+    TextSize=11, Font=CFG.Font, BorderSizePixel=0,
+},{
+    New("UIPadding",{PaddingLeft=UDim.new(0,7),PaddingRight=UDim.new(0,7)}),
+    New("UIStroke",{Color=CFG.Stroke}),
+    New("UICorner",{CornerRadius=UDim.new(0,4)}),
+})
+local function Tip(obj,txt)
+    obj.MouseEnter:Connect(function()
+        TipLbl.Text=txt
+        TipLbl.Size=UDim2.fromOffset(GTS(txt,11,CFG.Font).X+16,20)
+        TipLbl.Visible=true
+    end)
+    obj.MouseLeave:Connect(function() TipLbl.Visible=false end)
+end
+RunService.RenderStepped:Connect(function()
+    if TipLbl.Visible then
+        local m=UIS:GetMouseLocation()
+        TipLbl.Position=UDim2.fromOffset(m.X+16,m.Y+14)
+    end
+end)
+
+-- ============================================================
+--  MAIN WINDOW
+-- ============================================================
+local Win = New("Frame",{
+    Name="VortexWin", Parent=SG,
+    Size=UDim2.fromOffset(CFG.W,CFG.H),
+    Position=UDim2.new(0.5,-CFG.W/2,0.5,-CFG.H/2),
+    BackgroundColor3=CFG.Main, BorderSizePixel=0,
+    ClipsDescendants=false,
+},{
+    New("UICorner",{CornerRadius=UDim.new(0,7)}),
+    New("UIGradient",{
+        Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(13,9,24)),
+            ColorSequenceKeypoint.new(0.55,Color3.fromRGB(9,9,16)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(17,9,30)),
+        }), Rotation=135,
+    }),
+})
+local WinStroke = New("UIStroke",{Parent=Win, Color=CFG.Accent, Thickness=2})
+task.spawn(function()
+    while not Library._dead do
+        Tw(WinStroke,{Transparency=0.1,Color=Color3.fromRGB(215,195,255)},1.1,Enum.EasingStyle.Sine)
+        task.wait(1.1)
+        Tw(WinStroke,{Transparency=0.75,Color=Color3.fromRGB(95,60,185)},1.1,Enum.EasingStyle.Sine)
+        task.wait(1.1)
+    end
+end)
+
+-- drag window
+local _wd,_wdi,_wds,_wdp = false,nil,nil,nil
+Win.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        _wd=true _wds=i.Position _wdp=Win.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then _wd=false end
+        end)
+    end
+end)
+Win.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then
+        _wdi=i
+    end
+end)
+UIS.InputChanged:Connect(function(i)
+    if i==_wdi and _wd then
+        local d=i.Position-_wds
+        Tw(Win,{Position=UDim2.new(_wdp.X.Scale,_wdp.X.Offset+d.X,_wdp.Y.Scale,_wdp.Y.Offset+d.Y)},0.04)
+    end
+end)
+
+-- ── TopBar ───────────────────────────────────────────────
+local TopBar = New("Frame",{
+    Parent=Win, Size=UDim2.new(1,0,0,30),
+    BackgroundColor3=Color3.fromRGB(11,9,20), BorderSizePixel=0,
+},{
+    New("UICorner",{CornerRadius=UDim.new(0,7)}),
+    New("Frame",{Size=UDim2.new(1,0,0,10),Position=UDim2.new(0,0,1,-10),BackgroundColor3=Color3.fromRGB(11,9,20),BorderSizePixel=0}),
+    New("Frame",{Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BackgroundColor3=CFG.Stroke}),
+})
+
+-- animated title
+local TitleLbl = New("TextLabel",{
+    Parent=TopBar, RichText=true, Text="vortex union",
+    TextColor3=CFG.TextDim, TextSize=13, Font=CFG.Font,
+    BackgroundTransparency=1,
+    Size=UDim2.new(0,270,1,0), Position=UDim2.new(0,12,0,0),
+    TextXAlignment=Enum.TextXAlignment.Left,
+})
+task.spawn(function()
+    local seq={
+        "","v","vo","vor","vort","vorte","vortex","vortex ","vortex u",
+        "vortex un","vortex uni","vortex unio","vortex union",
+        "vortex unio","vortex uni","vortex un","vortex u","vortex ",
+        "vortex","vorte","vort","vor","vo","v","",
+    }
+    while not Library._dead do
+        for _,t in ipairs(seq) do
+            if Library._dead then break end
+            local d=t
+            if t:find("union")  then d=t:gsub("union",'<font color="#bdacff">union</font>') end
+            if t:find("vortex") then d=t:gsub("vortex",'<font color="#bdacff">vortex</font>') end
+            TitleLbl.Text=d task.wait(0.11)
+        end
+        task.wait(1.8)
+    end
+end)
+
+-- ── Control Buttons: − e × (maiores, sem □) ──────────────
+local CtrlHolder = New("Frame",{
+    Parent=TopBar,
+    Size=UDim2.new(0,62,0,26),
+    Position=UDim2.new(1,-66,0.5,-13),
+    BackgroundTransparency=1,
+},{
+    New("UIListLayout",{
+        FillDirection=Enum.FillDirection.Horizontal,
+        VerticalAlignment=Enum.VerticalAlignment.Center,
+        HorizontalAlignment=Enum.HorizontalAlignment.Right,
+        Padding=UDim.new(0,4),
+    }),
+})
+
+local function MkBtn(lbl, col, w, h, fs)
+    local b = New("TextButton",{
+        Parent=CtrlHolder,
+        Size=UDim2.new(0, w or 26, 0, h or 20),
+        BackgroundColor3=CFG.Secondary,
+        Text=lbl, TextColor3=col or CFG.TextDim,
+        TextSize=fs or 14, Font=Enum.Font.GothamBold,
+        AutoButtonColor=false,
+    },{
+        New("UICorner",{CornerRadius=UDim.new(0,4)}),
+        New("UIStroke",{Color=CFG.Stroke,Thickness=1}),
+    })
+    b.MouseEnter:Connect(function() Tw(b,{BackgroundColor3=Color3.fromRGB(38,28,62)},0.1) end)
+    b.MouseLeave:Connect(function() Tw(b,{BackgroundColor3=CFG.Secondary},0.1) end)
+    return b
+end
+
+local _minimized = false
+
+-- [ − ] colapsa para só a topbar
+local BtnMin = MkBtn("−", CFG.Accent, 26, 20, 16)
+BtnMin.MouseButton1Click:Connect(function()
+    _minimized = not _minimized
+    PagesFrame.Visible = true
+    TopBar.Visible     = true
+    if _minimized then
+        Tw(Win,{Size=UDim2.fromOffset(CFG.W,30)},0.28,Enum.EasingStyle.Quad)
+    else
+        Tw(Win,{Size=UDim2.fromOffset(CFG.W,CFG.H)},0.32,Enum.EasingStyle.Back)
+    end
+end)
+
+-- [ × ] fechar
+local BtnX = MkBtn("×", Color3.fromRGB(255,70,70), 26, 20, 16)
+BtnX.MouseButton1Click:Connect(function()
+    Library._dead=true
+    Tw(Win,{Size=UDim2.fromOffset(0,0),BackgroundTransparency=1},0.28)
+    task.wait(0.32) SG:Destroy()
+end)
+
+-- ── Sidebar ──────────────────────────────────────────────
+local Sidebar = New("Frame",{
+    Parent=Win,
+    Size=UDim2.new(0,52,1,-30),
+    Position=UDim2.new(0,0,0,30),
+    BackgroundColor3=Color3.fromRGB(11,9,20), BorderSizePixel=0,
+},{
+    New("Frame",{
+        Size=UDim2.new(0,1,1,0),
+        Position=UDim2.new(1,-1,0,0),
+        BackgroundColor3=CFG.Stroke,
+    }),
+    New("UIListLayout",{
+        Padding=UDim.new(0,6),
+        HorizontalAlignment=Enum.HorizontalAlignment.Center,
+        VerticalAlignment=Enum.VerticalAlignment.Top,
+        SortOrder=Enum.SortOrder.LayoutOrder,
+    }),
+    New("UIPadding",{PaddingTop=UDim.new(0,10)}),
+})
+
+local PagesFrame = New("Frame",{
+    Parent=Win,
+    Size=UDim2.new(1,-52,1,-30),
+    Position=UDim2.new(0,52,0,30),
+    BackgroundTransparency=1,
+    ClipsDescendants=true,
+})
+
+-- ============================================================
+--  TAB
+-- ============================================================
+function Library:Tab(name, iconId)
+    local TabBtn = New("TextButton",{
+        Parent=Sidebar,
+        Size=UDim2.new(0,36,0,36),
+        BackgroundColor3=CFG.Main,
+        Text="", AutoButtonColor=false,
+        LayoutOrder=#self._tabs+1,
+    },{
+        New("UICorner",{CornerRadius=UDim.new(0,8)}),
+        New("UIStroke",{Name="TStr",Color=CFG.Stroke,Thickness=1}),
+    })
+
+    local Ico = New("ImageLabel",{
+        Name="Ico",
+        Parent=TabBtn,
+        Size=UDim2.new(0.62,0,0.62,0),
+        Position=UDim2.new(0.19,0,0.19,0),
+        BackgroundTransparency=1,
+        Image="rbxassetid://"..tostring(iconId),
+        ImageColor3=CFG.TextDim,
+        ScaleType=Enum.ScaleType.Fit,
+    })
+
+    local Page = New("ScrollingFrame",{
+        Parent=PagesFrame,
+        Size=UDim2.new(1,0,1,0),
+        BackgroundTransparency=1, Visible=false,
+        ScrollBarThickness=2,
+        ScrollBarImageColor3=CFG.Accent,
+        CanvasSize=UDim2.new(0,0,0,0),
+        AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        BorderSizePixel=0,
+    })
+    New("UIPadding",{Parent=Page,
+        PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,10),
+        PaddingRight=UDim.new(0,10),PaddingBottom=UDim.new(0,10),
+    })
+    local LeftCol = New("Frame",{
+        Parent=Page, Size=UDim2.new(0.495,0,0,0),
+        AutomaticSize=Enum.AutomaticSize.Y, BackgroundTransparency=1,
+    },{New("UIListLayout",{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder})})
+    local RightCol = New("Frame",{
+        Parent=Page, Size=UDim2.new(0.495,0,0,0),
+        Position=UDim2.new(0.505,0,0,0),
+        AutomaticSize=Enum.AutomaticSize.Y, BackgroundTransparency=1,
+    },{New("UIListLayout",{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder})})
+
+    local TStr = TabBtn:FindFirstChild("TStr")
+    local tabData = {Btn=TabBtn, Page=Page, Ico=Ico, Str=TStr}
+    table.insert(self._tabs, tabData)
+
+    local function Activate()
+        for _,t in ipairs(Library._tabs) do
+            Tw(t.Btn,{BackgroundColor3=CFG.Main},0.15)
+            Tw(t.Ico,{ImageColor3=CFG.TextDim},0.15)
+            Tw(t.Str,{Color=CFG.Stroke,Transparency=0},0.15)
+            t.Page.Visible=false
+        end
+        Tw(TabBtn,{BackgroundColor3=CFG.Secondary},0.15)
+        Tw(Ico,{ImageColor3=CFG.Accent},0.15)
+        Tw(TStr,{Color=CFG.Accent,Transparency=0.25},0.15)
+        Page.Visible=true
+    end
+
+    TabBtn.MouseButton1Click:Connect(Activate)
+    TabBtn.MouseEnter:Connect(function()
+        if not Page.Visible then Tw(TabBtn,{BackgroundColor3=Color3.fromRGB(22,17,36)},0.1) end
+    end)
+    TabBtn.MouseLeave:Connect(function()
+        if not Page.Visible then Tw(TabBtn,{BackgroundColor3=CFG.Main},0.1) end
+    end)
+    if #self._tabs==1 then Activate() end
+
+    local GF={}
+    local _leftNext=true
+
+    -- ── GROUP ─────────────────────────────────────────────
+    function GF:Group(title)
+        local col = _leftNext and LeftCol or RightCol
+        _leftNext  = not _leftNext
+
+        local GFrame = New("Frame",{
+            Parent=col, Size=UDim2.new(1,0,0,0),
+            AutomaticSize=Enum.AutomaticSize.Y,
+            BackgroundColor3=CFG.Panel, BorderSizePixel=0,
+        },{
+            New("UICorner",{CornerRadius=UDim.new(0,5)}),
+            New("UIStroke",{Name="GStr",Color=CFG.Stroke,Thickness=1}),
+        })
+
+        local gs = GFrame:FindFirstChild("GStr")
+        task.spawn(function()
+            local h=0
+            while not Library._dead and gs and gs.Parent do
+                h=(h+0.004)%1
+                gs.Color=Color3.fromHSV(h,0.5,0.6)
+                task.wait(0.05)
+            end
+        end)
+
+        New("Frame",{
+            Parent=GFrame, Size=UDim2.new(1,0,0,24),
+            BackgroundColor3=CFG.Secondary, BorderSizePixel=0,
+        },{
+            New("UICorner",{CornerRadius=UDim.new(0,5)}),
+            New("Frame",{Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-7),BackgroundColor3=CFG.Secondary}),
+            New("Frame",{
+                Size=UDim2.new(0,3,0,13),Position=UDim2.new(0,7,0.5,-6),
+                BackgroundColor3=CFG.Accent,
+            },{New("UICorner",{CornerRadius=UDim.new(1,0)})}),
+            New("TextLabel",{
+                Text=title, Font=Enum.Font.GothamBold, TextSize=11,
+                TextColor3=CFG.Text, BackgroundTransparency=1,
+                Size=UDim2.new(1,-18,1,0), Position=UDim2.new(0,16,0,0),
+                TextXAlignment=Enum.TextXAlignment.Left,
+            }),
+        })
+
+        local Content = New("Frame",{
+            Parent=GFrame, Size=UDim2.new(1,0,0,0),
+            Position=UDim2.new(0,0,0,24),
+            AutomaticSize=Enum.AutomaticSize.Y, BackgroundTransparency=1,
+        },{
+            New("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder}),
+            New("UIPadding",{
+                PaddingTop=UDim.new(0,7),PaddingBottom=UDim.new(0,7),
+                PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),
+            }),
+        })
+
+        local IF={}
+
+        -- TOGGLE
+        function IF:Toggle(cfg)
+            local on = cfg.Default or false
+            local Row = New("TextButton",{
+                Parent=Content, Size=UDim2.new(1,0,0,24),
+                BackgroundColor3=CFG.Secondary, Text="", AutoButtonColor=false,
+            },{
+                New("UICorner",{CornerRadius=UDim.new(0,5)}),
+                New("UIStroke",{Name="RS",Color=CFG.Stroke,Thickness=1}),
+            })
+            local Lbl = New("TextLabel",{
+                Parent=Row, Text=cfg.Name,
+                TextColor3=on and CFG.Text or (cfg.Risky and Color3.fromRGB(220,65,65) or CFG.TextDim),
+                TextSize=11, Font=CFG.Font, BackgroundTransparency=1,
+                Position=UDim2.new(0,9,0,0),
+                Size=UDim2.new(1,-48,1,0),
+                TextXAlignment=Enum.TextXAlignment.Left,
+            })
+            local Track = New("Frame",{
+                Parent=Row, Size=UDim2.new(0,30,0,14),
+                Position=UDim2.new(1,-36,0.5,-7),
+                BackgroundColor3=on and CFG.Accent or Color3.fromRGB(30,25,48),
+                BorderSizePixel=0,
+            },{
+                New("UICorner",{CornerRadius=UDim.new(1,0)}),
+                New("UIStroke",{Color=CFG.Stroke,Thickness=1}),
+            })
+            local Thumb = New("Frame",{
+                Parent=Track,
+                Size=UDim2.new(0,10,0,10),
+                Position=on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5),
+                BackgroundColor3=Color3.new(1,1,1),
+            },{New("UICorner",{CornerRadius=UDim.new(1,0)})})
+            local RS = Row:FindFirstChild("RS")
+
+            local function Set(v, fire)
+                on=v
+                Tw(Track,{BackgroundColor3=on and CFG.Accent or Color3.fromRGB(30,25,48)},0.18)
+                Tw(Thumb,{Position=on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)},0.18)
+                Tw(Lbl,{TextColor3=on and CFG.Text or (cfg.Risky and Color3.fromRGB(220,65,65) or CFG.TextDim)},0.15)
+                Tw(RS,{Color=on and CFG.Accent or CFG.Stroke},0.18)
+                if fire and cfg.Callback then cfg.Callback(on) end
+            end
+            Set(on, false)
+
+            Row.MouseButton1Click:Connect(function() Set(not on, true) end)
+            Row.MouseEnter:Connect(function() Tw(Row,{BackgroundColor3=Color3.fromRGB(25,20,40)},0.1) end)
+            Row.MouseLeave:Connect(function() Tw(Row,{BackgroundColor3=CFG.Secondary},0.1) end)
+            if cfg.Tooltip then Tip(Row,cfg.Tooltip) end
+            return {Set=function(v) Set(v,true) end, Get=function() return on end}
+        end
+
+        -- SLIDER
+        function IF:Slider(cfg)
+            local val=cfg.Default or cfg.Min
+            local drag=false
+            local Wrap=New("Frame",{Parent=Content,Size=UDim2.new(1,0,0,36),BackgroundTransparency=1})
+            New("TextLabel",{Parent=Wrap,Text=cfg.Name,TextColor3=CFG.TextDim,TextSize=11,Font=CFG.Font,BackgroundTransparency=1,Size=UDim2.new(0.7,0,0,15),TextXAlignment=Enum.TextXAlignment.Left})
+            local VLbl=New("TextLabel",{Parent=Wrap,Text=val..(cfg.Unit or ""),TextColor3=CFG.Accent,TextSize=11,Font=CFG.Font,BackgroundTransparency=1,Size=UDim2.new(1,0,0,15),TextXAlignment=Enum.TextXAlignment.Right})
+            local Track=New("Frame",{Parent=Wrap,Size=UDim2.new(1,0,0,6),Position=UDim2.new(0,0,0,22),BackgroundColor3=CFG.Secondary,BorderSizePixel=0},{
+                New("UICorner",{CornerRadius=UDim.new(1,0)}),
+                New("UIStroke",{Color=CFG.Stroke}),
+            })
+            local Fill=New("Frame",{Parent=Track,Size=UDim2.new(0,0,1,0),BackgroundColor3=CFG.Accent},{New("UICorner",{CornerRadius=UDim.new(1,0)})})
+            local function Apply(inp)
+                local p=math.clamp((inp.Position.X-Track.AbsolutePosition.X)/Track.AbsoluteSize.X,0,1)
+                val=math.floor(cfg.Min+(cfg.Max-cfg.Min)*p)
+                Tw(Fill,{Size=UDim2.new(p,0,1,0)},0.04)
+                VLbl.Text=val..(cfg.Unit or "")
+                if cfg.Callback then cfg.Callback(val) end
+            end
+            Wrap.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true Apply(i) end end)
+            UIS.InputChanged:Connect(function(i) if drag and i.UserInputType==Enum.UserInputType.MouseMovement then Apply(i) end end)
+            UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
+            Fill.Size=UDim2.new((val-cfg.Min)/(cfg.Max-cfg.Min),0,1,0)
+            if cfg.Tooltip then Tip(Wrap,cfg.Tooltip) end
+        end
+
+        -- DROPDOWN
+        function IF:Dropdown(cfg)
+            local cur=cfg.Default or cfg.Options[1]
+            local open=false
+            local Wrap=New("Frame",{Parent=Content,Size=UDim2.new(1,0,0,36),BackgroundTransparency=1,ZIndex=20})
+            New("TextLabel",{Parent=Wrap,Text=cfg.Name,TextColor3=CFG.TextDim,TextSize=11,Font=CFG.Font,BackgroundTransparency=1,Size=UDim2.new(1,0,0,15),TextXAlignment=Enum.TextXAlignment.Left})
+            local Box=New("TextButton",{Parent=Wrap,Size=UDim2.new(1,0,0,20),Position=UDim2.new(0,0,0,16),BackgroundColor3=CFG.Secondary,Text="",AutoButtonColor=false},{
+                New("UICorner",{CornerRadius=UDim.new(0,4)}),
+                New("UIStroke",{Color=CFG.Stroke}),
+                New("TextLabel",{Name="Val",Text=cur,Size=UDim2.new(1,-20,1,0),Position=UDim2.new(0,6,0,0),BackgroundTransparency=1,TextColor3=CFG.Text,TextSize=11,Font=CFG.Font,TextXAlignment=Enum.TextXAlignment.Left}),
+                New("TextLabel",{Text="▾",Size=UDim2.new(0,18,1,0),Position=UDim2.new(1,-18,0,0),BackgroundTransparency=1,TextColor3=CFG.Accent,TextSize=13}),
+            })
+            local List=New("ScrollingFrame",{Parent=Box,Size=UDim2.new(1,0,0,0),Position=UDim2.new(0,0,1,2),BackgroundColor3=CFG.Panel,BorderSizePixel=0,Visible=false,ZIndex=60,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=2},{
+                New("UICorner",{CornerRadius=UDim.new(0,4)}),
+                New("UIStroke",{Color=CFG.Stroke}),
+                New("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder}),
+            })
+            for _,opt in ipairs(cfg.Options) do
+                local b=New("TextButton",{Parent=List,Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,Text=opt,TextColor3=opt==cur and CFG.Accent or CFG.TextDim,TextSize=11,Font=CFG.Font})
+                b.MouseEnter:Connect(function() b.BackgroundTransparency=0 b.BackgroundColor3=Color3.fromRGB(26,20,42) end)
+                b.MouseLeave:Connect(function() b.BackgroundTransparency=1 end)
+                b.MouseButton1Click:Connect(function()
+                    cur=opt Box.Val.Text=opt
+                    if cfg.Callback then cfg.Callback(opt) end
+                    Tw(List,{Size=UDim2.new(1,0,0,0)},0.12) task.wait(0.13) List.Visible=false open=false
+                end)
+            end
+            Box.MouseButton1Click:Connect(function()
+                open=not open
+                if open then
+                    List.Visible=true
+                    Tw(List,{Size=UDim2.new(1,0,0,math.min(#cfg.Options*20,100))},0.15,Enum.EasingStyle.Back)
+                else
+                    Tw(List,{Size=UDim2.new(1,0,0,0)},0.12) task.wait(0.13) List.Visible=false
+                end
+            end)
+            if cfg.Tooltip then Tip(Wrap,cfg.Tooltip) end
+        end
+
+        -- COLORPICKER
+        function IF:ColorPicker(cfg)
+            local col=cfg.Default or Color3.new(1,1,1)
+            local opened=false
+            local Wrap=New("Frame",{Parent=Content,Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,ZIndex=15})
+            New("TextLabel",{Parent=Wrap,Text=cfg.Name,TextColor3=CFG.TextDim,TextSize=11,Font=CFG.Font,BackgroundTransparency=1,Size=UDim2.new(0.65,0,1,0),TextXAlignment=Enum.TextXAlignment.Left})
+            local Prev=New("TextButton",{Parent=Wrap,Size=UDim2.new(0,28,0,13),AnchorPoint=Vector2.new(1,0.5),Position=UDim2.new(1,0,0.5,0),BackgroundColor3=col,Text="",AutoButtonColor=false},{New("UIStroke",{Color=CFG.Stroke}),New("UICorner",{CornerRadius=UDim.new(0,3)})})
+            local PF=New("Frame",{Parent=Prev,Size=UDim2.new(0,175,0,0),Position=UDim2.new(1,0,1,4),AnchorPoint=Vector2.new(1,0),BackgroundColor3=CFG.Main,BorderSizePixel=0,ClipsDescendants=true,ZIndex=65},{New("UIStroke",{Color=CFG.Stroke}),New("UICorner",{CornerRadius=UDim.new(0,4)})})
+            local SVP=New("TextButton",{Parent=PF,Size=UDim2.new(1,-18,0,95),Position=UDim2.new(0,9,0,9),BackgroundColor3=Color3.fromHSV(0,1,1),Text="",AutoButtonColor=false},{
+                New("ImageLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Image="rbxassetid://4801885019"}),
+                New("ImageLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Image="rbxassetid://4801885019",ImageColor3=Color3.new(0,0,0),Rotation=90}),
+            })
+            local Cur=New("Frame",{Parent=SVP,Size=UDim2.new(0,5,0,5),BackgroundColor3=Color3.new(1,1,1),AnchorPoint=Vector2.new(0.5,0.5)},{New("UICorner",{CornerRadius=UDim.new(1,0)})})
+            local HBar=New("TextButton",{Parent=PF,Size=UDim2.new(1,-18,0,9),Position=UDim2.new(0,9,0,112),Text="",AutoButtonColor=false},{
+                New("UIGradient",{Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromHSV(0,1,1)),ColorSequenceKeypoint.new(0.17,Color3.fromHSV(0.17,1,1)),ColorSequenceKeypoint.new(0.33,Color3.fromHSV(0.33,1,1)),ColorSequenceKeypoint.new(0.5,Color3.fromHSV(0.5,1,1)),ColorSequenceKeypoint.new(0.67,Color3.fromHSV(0.67,1,1)),ColorSequenceKeypoint.new(0.83,Color3.fromHSV(0.83,1,1)),ColorSequenceKeypoint.new(1,Color3.fromHSV(1,1,1))})}),
+                New("UICorner",{CornerRadius=UDim.new(0,2)}),
+            })
+            local H,S,V=0,1,1 local dSV,dH=false,false
+            local function UC()
+                col=Color3.fromHSV(H,S,V) Prev.BackgroundColor3=col
+                SVP.BackgroundColor3=Color3.fromHSV(H,1,1) Cur.Position=UDim2.new(S,0,1-V,0)
+                if cfg.Callback then cfg.Callback(col) end
+            end
+            SVP.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dSV=true end end)
+            HBar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dH=true end end)
+            UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dSV=false dH=false end end)
+            UIS.InputChanged:Connect(function(i)
+                if i.UserInputType==Enum.UserInputType.MouseMovement then
+                    if dSV then
+                        local sz=SVP.AbsoluteSize local ps=SVP.AbsolutePosition
+                        S=math.clamp((i.Position.X-ps.X)/sz.X,0,1)
+                        V=1-math.clamp((i.Position.Y-ps.Y)/sz.Y,0,1) UC()
+                    elseif dH then
+                        local sz=HBar.AbsoluteSize local ps=HBar.AbsolutePosition
+                        H=math.clamp((i.Position.X-ps.X)/sz.X,0,1) UC()
+                    end
+                end
+            end)
+            Prev.MouseButton1Click:Connect(function()
+                opened=not opened
+                Tw(PF,{Size=opened and UDim2.new(0,175,0,165) or UDim2.new(0,175,0,0)},0.2)
+            end)
+            if cfg.Tooltip then Tip(Wrap,cfg.Tooltip) end
+        end
+
+        -- TEXTBOX
+        function IF:Textbox(cfg)
+            local Wrap=New("Frame",{Parent=Content,Size=UDim2.new(1,0,0,34),BackgroundTransparency=1})
+            New("TextLabel",{Parent=Wrap,Text=cfg.Name,TextColor3=CFG.TextDim,TextSize=11,Font=CFG.Font,BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),TextXAlignment=Enum.TextXAlignment.Left})
+            local TB=New("TextBox",{Parent=Wrap,Size=UDim2.new(1,0,0,18),Position=UDim2.new(0,0,0,16),BackgroundColor3=CFG.Secondary,TextColor3=CFG.Text,PlaceholderText=cfg.Placeholder or "...",PlaceholderColor3=CFG.TextDim,Text="",Font=CFG.Font,TextSize=11,BorderSizePixel=0},{
+                New("UICorner",{CornerRadius=UDim.new(0,4)}),
+                New("UIStroke",{Name="TBS",Color=CFG.Stroke}),
+                New("UIPadding",{PaddingLeft=UDim.new(0,6)}),
+            })
+            TB.Focused:Connect(function() Tw(TB:FindFirstChild("TBS"),{Color=CFG.Accent},0.1) end)
+            TB.FocusLost:Connect(function()
+                Tw(TB:FindFirstChild("TBS"),{Color=CFG.Stroke},0.1)
+                if cfg.Callback then cfg.Callback(TB.Text) end
+            end)
+            if cfg.Tooltip then Tip(Wrap,cfg.Tooltip) end
+        end
+
+        -- KEYBIND
+        function IF:Keybind(cfg)
+            local key=cfg.Default or Enum.KeyCode.Insert
+            local waiting=false
+            local Wrap=New("Frame",{Parent=Content,Size=UDim2.new(1,0,0,20),BackgroundTransparency=1})
+            New("TextLabel",{Parent=Wrap,Text=cfg.Name,TextColor3=CFG.TextDim,TextSize=11,Font=CFG.Font,BackgroundTransparency=1,Size=UDim2.new(0.6,0,1,0),TextXAlignment=Enum.TextXAlignment.Left})
+            local KB=New("TextButton",{Parent=Wrap,Size=UDim2.new(0,60,1,0),AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),BackgroundColor3=CFG.Secondary,Text=key.Name,TextColor3=CFG.TextDim,TextSize=10,Font=CFG.Font,AutoButtonColor=false},{
+                New("UICorner",{CornerRadius=UDim.new(0,4)}),
+                New("UIStroke",{Name="KBS",Color=CFG.Stroke}),
+            })
+            KB.MouseButton1Click:Connect(function()
+                waiting=true KB.Text="..."
+                Tw(KB:FindFirstChild("KBS"),{Color=CFG.Accent},0.1)
+                Tw(KB,{TextColor3=CFG.Accent},0.1)
+            end)
+            UIS.InputBegan:Connect(function(i)
+                if waiting and i.UserInputType==Enum.UserInputType.Keyboard then
+                    waiting=false key=i.KeyCode KB.Text=key.Name
+                    Tw(KB:FindFirstChild("KBS"),{Color=CFG.Stroke},0.1)
+                    Tw(KB,{TextColor3=CFG.TextDim},0.1)
+                    if cfg.Callback then cfg.Callback(key) end
+                end
+            end)
+            if cfg.Tooltip then Tip(Wrap,cfg.Tooltip) end
+        end
+
+        -- BUTTON
+        function IF:Button(cfg)
+            local bc = cfg.Variant=="Primary" and CFG.Accent
+                    or cfg.Variant=="Danger"  and Color3.fromRGB(210,50,50)
+                    or CFG.Secondary
+            local tc = (cfg.Variant=="Primary" or cfg.Variant=="Danger")
+                    and Color3.new(0,0,0) or CFG.TextDim
+            local Btn=New("TextButton",{
+                Parent=Content, Size=UDim2.new(1,0,0,24),
+                BackgroundColor3=bc, Text=cfg.Name, TextColor3=tc,
+                Font=Enum.Font.GothamBold, TextSize=10, AutoButtonColor=false,
+            },{
+                New("UICorner",{CornerRadius=UDim.new(0,5)}),
+                New("UIStroke",{Color=CFG.Stroke,Thickness=1}),
+            })
+            Btn.MouseEnter:Connect(function()
+                Tw(Btn,{BackgroundColor3=Color3.new(
+                    math.clamp(bc.R+0.09,0,1),
+                    math.clamp(bc.G+0.09,0,1),
+                    math.clamp(bc.B+0.09,0,1))},0.1)
+            end)
+            Btn.MouseLeave:Connect(function() Tw(Btn,{BackgroundColor3=bc},0.1) end)
+            Btn.MouseButton1Down:Connect(function() Tw(Btn,{Size=UDim2.new(0.95,0,0,20)},0.07) end)
+            Btn.MouseButton1Up:Connect(function()
+                Tw(Btn,{Size=UDim2.new(1,0,0,24)},0.14,Enum.EasingStyle.Back)
+                if cfg.Callback then cfg.Callback() end
+            end)
+            if cfg.Tooltip then Tip(Btn,cfg.Tooltip) end
+        end
+
+        return IF
+    end -- Group
+    return GF
+end -- Tab
+
+-- ============================================================
+--  BALL — drag vs click detection
+-- ============================================================
+local BSIZ = 66
+local _ballDragging = false
+local _ballDown     = false
+local _ballDownPos  = nil
+local _ballStartPos = nil
+local DRAG_THRESH   = 9
+
+local BallHolder = New("Frame",{
+    Parent=SG,
+    Size=UDim2.fromOffset(BSIZ,BSIZ),
+    Position=UDim2.new(0.5,-BSIZ/2,0,10),
+    BackgroundTransparency=1, ZIndex=200,
+})
+
+local _glowRings={}
+for i,d in ipairs({{8,0.3},{17,0.58},{26,0.8}}) do
+    local pad,tr=d[1],d[2]
+    local ring=New("Frame",{
+        Parent=BallHolder,
+        Size=UDim2.fromOffset(BSIZ+pad*2,BSIZ+pad*2),
+        Position=UDim2.fromOffset(-pad,-pad),
+        BackgroundTransparency=1, ZIndex=197,
+    },{
+        New("UICorner",{CornerRadius=UDim.new(1,0)}),
+        New("UIStroke",{Color=CFG.Accent,Thickness=2,Transparency=tr}),
+    })
+    table.insert(_glowRings, ring:FindFirstChildOfClass("UIStroke"))
+end
+
+local Ball = New("Frame",{
+    Parent=BallHolder,
+    Size=UDim2.fromOffset(BSIZ,BSIZ),
+    BackgroundColor3=Color3.fromRGB(14,9,26),
+    BorderSizePixel=0,
+    ZIndex=200,
+    ClipsDescendants=true,
+},{
+    New("UICorner",{CornerRadius=UDim.new(1,0)}),
+    New("UIStroke",{Name="BS",Color=CFG.Accent,Thickness=2}),
+    New("UIGradient",{
+        Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(32,18,58)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(10,7,20)),
+        }),Rotation=135,
+    }),
+})
+
+-- Ícone circular: o próprio Ball tem ClipsDescendants=true e UICorner(1,0)
+-- então o ImageLabel fica recortado em círculo automaticamente
+local BallIcon = New("ImageLabel",{
+    Parent=Ball,
+    Size=UDim2.new(0.72,0,0.72,0),
+    Position=UDim2.new(0.14,0,0.14,0),
+    BackgroundTransparency=1,
+    Image="rbxassetid://70948224300476",
+    ImageColor3=CFG.Accent,
+    ScaleType=Enum.ScaleType.Fit,
+    ZIndex=201,
+})
+
+local BallBtn = New("TextButton",{
+    Parent=BallHolder,
+    Size=UDim2.fromOffset(BSIZ,BSIZ),
+    BackgroundTransparency=1,
+    Text="", ZIndex=202,
+})
+
+task.spawn(function()
+    local BS=Ball:FindFirstChild("BS")
+    while not Library._dead do
+        local t=tick()
+        for i,r in ipairs(_glowRings) do
+            local p=(t*1.3+(i-1)*0.55)%(math.pi*2)
+            local v=0.5+0.5*math.sin(p)
+            r.Transparency=0.12+v*0.78
+            r.Color=Color3.fromHSV(0.73+math.sin(t*0.25+i)*0.04,0.55,0.92)
+        end
+        if BS then
+            local v=0.5+0.5*math.sin(t*1.7)
+            BS.Color=Color3.fromHSV(0.73,0.35+v*0.35,1)
+            BallIcon.ImageColor3=Color3.fromHSV(0.73,0.25+v*0.35,1)
+        end
+        task.wait(0.04)
+    end
+end)
+
+task.spawn(function()
+    local t=0
+    while not Library._dead do
+        t=t+0.04
+        if not _ballDragging then
+            local cur=BallHolder.Position
+            BallHolder.Position=UDim2.new(cur.X.Scale,cur.X.Offset,cur.Y.Scale,cur.Y.Offset+math.sin(t)*0.4)
+        end
+        task.wait(0.04)
+    end
+end)
+
+BallBtn.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        _ballDown=true
+        _ballDragging=false
+        _ballDownPos=Vector2.new(i.Position.X,i.Position.Y)
+        _ballStartPos=Vector2.new(BallHolder.Position.X.Offset,BallHolder.Position.Y.Offset)
+    end
+end)
+
+UIS.InputChanged:Connect(function(i)
+    if not _ballDown then return end
+    if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
+    local cur=Vector2.new(i.Position.X,i.Position.Y)
+    local delta=cur-_ballDownPos
+    if not _ballDragging and delta.Magnitude>DRAG_THRESH then
+        _ballDragging=true
+    end
+    if _ballDragging then
+        local vp=workspace.CurrentCamera.ViewportSize
+        local sc=UIScale.Scale
+        local nx=math.clamp(_ballStartPos.X+delta.X/sc, 0, vp.X/sc-BSIZ)
+        local ny=math.clamp(_ballStartPos.Y+delta.Y/sc, 0, vp.Y/sc-BSIZ)
+        BallHolder.Position=UDim2.new(0,nx,0,ny)
+    end
+end)
+
+local _winVisible=true
+
+UIS.InputEnded:Connect(function(i)
+    if not _ballDown then return end
+    if i.UserInputType~=Enum.UserInputType.MouseButton1 and i.UserInputType~=Enum.UserInputType.Touch then return end
+    local wasDrag=_ballDragging
+    _ballDown=false
+    _ballDragging=false
+
+    if not wasDrag then
+        _winVisible=not _winVisible
+        Tw(Ball,{Size=UDim2.fromOffset(BSIZ-8,BSIZ-8)},0.07)
+        task.spawn(function()
+            task.wait(0.08)
+            Tw(Ball,{Size=UDim2.fromOffset(BSIZ,BSIZ)},0.16,Enum.EasingStyle.Back)
+        end)
+        if _winVisible then
+            Win.Visible=true
+            Win.Size=UDim2.fromOffset(0,0)
+            Tw(Win,{Size=UDim2.fromOffset(CFG.W,CFG.H)},0.36,Enum.EasingStyle.Back)
+        else
+            Tw(Win,{Size=UDim2.fromOffset(0,0)},0.26,Enum.EasingStyle.Quad)
+            task.wait(0.28)
+            Win.Visible=false
+            Win.Size=UDim2.fromOffset(CFG.W,CFG.H)
+        end
+    end
+end)
+
+UIS.InputBegan:Connect(function(i,gpe)
+    if not gpe and i.KeyCode==Library.MenuKey then
+        _winVisible=not _winVisible
+        if _winVisible then
+            Win.Visible=true Win.Size=UDim2.fromOffset(0,0)
+            Tw(Win,{Size=UDim2.fromOffset(CFG.W,CFG.H)},0.36,Enum.EasingStyle.Back)
+        else
+            Tw(Win,{Size=UDim2.fromOffset(0,0)},0.26,Enum.EasingStyle.Quad)
+            task.wait(0.28) Win.Visible=false
+            Win.Size=UDim2.fromOffset(CFG.W,CFG.H)
+        end
+    end
+end)
+
+Library:Notify("Vortex Union carregado!", "success")
+Library:Notify("Bem-vindo · v3.0")
+
+return Library
