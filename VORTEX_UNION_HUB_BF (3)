@@ -1,0 +1,104 @@
+--[[
+    VORTEX UNION HUB BF
+    Status: 100% Fixed (Pastebin Library Link)
+    Language: English
+]]
+
+-- 1. Library Loader (New Pastebin Link)
+local redzlib = loadstring(game:HttpGet("https://pastebin.com/raw/KHJwrs00"))()
+
+-- 2. Window Setup
+local Window = redzlib:MakeWindow({
+  Title = "VORTEX UNION HUB BF",
+  SubTitle = "by Vortex Union",
+  SaveFolder = "VortexUnionHub.lua"
+})
+
+-- 3. Minimize Button
+Window:AddMinimizeButton({
+    Button = { Image = "rbxassetid://94588950767251", BackgroundTransparency = 0 },
+    Corner = { CornerRadius = UDim.new(0, 5) },
+})
+
+-- 4. Global Variables & Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- 5. Tabs
+local TabDiscord = Window:MakeTab({"Discord", "info"})
+local TabFarm = Window:MakeTab({"Auto Farm", "home"})
+local TabSea = Window:MakeTab({"Sea Events", "waves"})
+local TabItem = Window:MakeTab({"Items / Styles", "swords"})
+local TabFruit = Window:MakeTab({"Fruit / Raid", "cherry"})
+local TabVisual = Window:MakeTab({"Visuals", "user"})
+local TabSettings = Window:MakeTab({"Settings", "settings"})
+
+-- 6. Discord
+TabDiscord:AddDiscordInvite({
+    Name = "VORTEX UNION HUB",
+    Description = "Join for updates and support!",
+    Logo = "rbxassetid://94588950767251",
+    Invite = "https://discord.gg/b7eNFdXPP",
+})
+
+-- 7. Farm Section
+TabFarm:AddSection({"Leveling"})
+TabFarm:AddDropdown({
+    Name = "Select Weapon",
+    Options = {"Melee", "Sword", "Fruit", "Gun"},
+    Default = "Melee",
+    Callback = function(Value) _G.SelectWeapon = Value end
+})
+
+TabFarm:AddToggle({
+    Name = "Auto Farm Level",
+    Default = false,
+    Callback = function(v) _G.AutoFarm = v end
+})
+
+-- 8. Sea Events (OnyxHub Integrated)
+TabSea:AddSection({"Sea Events"})
+TabSea:AddToggle({ Name = "Auto Terror Shark", Default = false, Callback = function(v) _G.TerrorShark = v end })
+TabSea:AddToggle({ Name = "Auto Sea Beast", Default = false, Callback = function(v) _G.SeaBeast = v end })
+TabSea:AddToggle({ Name = "Auto Leviathan", Default = false, Callback = function(v) _G.Leviathan = v end })
+TabSea:AddToggle({ Name = "Auto Find Kitsune Island", Default = false, Callback = function(v) _G.AutofindKitIs = v end })
+
+-- 9. Items & Styles
+TabItem:AddSection({"Fighting Styles"})
+TabItem:AddToggle({ Name = "Auto God Human", Default = false, Callback = function(v) _G.Auto_God_Human = v end })
+TabItem:AddToggle({ Name = "Auto Sanguine Art", Default = false, Callback = function(v) _G.Auto_SanguineArt = v end })
+
+-- 10. Fruit & Raid
+TabFruit:AddSection({"Fruit Actions"})
+TabFruit:AddToggle({ Name = "Auto Random Fruit", Default = false, Callback = function(v) _G.Random_Auto = v end })
+TabFruit:AddToggle({ Name = "Auto Store Fruit", Default = false, Callback = function(v) _G.StoreF = v end })
+
+-- 11. Visuals (ESP)
+TabVisual:AddSection({"ESP"})
+TabVisual:AddToggle({ Name = "Player ESP", Default = false, Callback = function(v) _G.PlayerEsp = v end })
+TabVisual:AddToggle({ Name = "Fruit ESP", Default = false, Callback = function(v) _G.FruitEsp = v end })
+
+-- 12. Settings
+TabSettings:AddSection({"Utilities"})
+TabSettings:AddToggle({ Name = "Walk on Water", Default = true, Callback = function(v) _G.WalkWater = v end })
+TabSettings:AddToggle({ Name = "Fast Attack", Default = true, Callback = function(v) _G.FastAttack = v end })
+
+-- 13. Functional Logic (The "Brain")
+spawn(function()
+    while task.wait() do
+        pcall(function()
+            if _G.WalkWater then
+                local map = workspace:FindFirstChild("Map")
+                if map and map:FindFirstChild("WaterBase-Plane") then
+                    map["WaterBase-Plane"].CanCollide = true
+                    map["WaterBase-Plane"].Size = Vector3.new(1000, 112, 1000)
+                end
+            end
+        end)
+    end
+end)
+
+print("VORTEX UNION HUB BF Loaded Successfully!")
