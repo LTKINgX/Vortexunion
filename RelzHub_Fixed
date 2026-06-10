@@ -1,0 +1,175 @@
+local RelzUILib = loadstring(game:HttpGet("https://storage.relzhub.com/ui/v1.lua"))()
+
+local Window = RelzUILib:Window({
+    Title = "Relz Hub - Fixed & Optimized",
+})
+
+-- [[ DETECÇÃO DE MUNDO ]]
+local World1 = game.PlaceId == 2753915549 or game.PlaceId == 85211729168715
+local World2 = game.PlaceId == 4442272183 or game.PlaceId == 79091703265657
+local World3 = game.PlaceId == 7449423635 or game.PlaceId == 100117331123089
+
+-- [[ TABELAS DE BOSSES POR SEA ]]
+local BossList = {}
+if World1 then 
+    BossList = {"The Gorilla King", "Bobby", "The Saw", "Yeti", "Mob Leader", "Vice Admiral", "Saber Expert", "Warden", "Chief Warden", "Swan", "Magma Admiral", "Fishman Lord", "Wysper", "Thunder God", "Cyborg", "Ice Admiral", "Greybeard"}
+elseif World2 then
+    BossList = {"Diamond", "Jeremy", "Fajita", "Don Swan", "Smoke Admiral", "Awakened Ice Admiral", "Tide Keeper", "Darkbeard", "Cursed Captain", "Order"}
+elseif World3 then
+    BossList = {"Stone", "Hydra Leader", "Kilo Admiral", "Captain Elephant", "Beautiful Pirate", "Cake Queen", "Longma", "Soul Reaper"}
+end
+
+-- [[ TABS ORGANIZADOS ]]
+local Tabs = {
+    MainTab = Window:Tab({ Title = "Main", Icon = "house" }),
+    Sea1Tab = World1 and Window:Tab({ Title = "First Sea", Icon = "map" }) or nil,
+    Sea2Tab = World2 and Window:Tab({ Title = "Second Sea", Icon = "map" }) or nil,
+    Sea3Tab = World3 and Window:Tab({ Title = "Third Sea", Icon = "map" }) or nil,
+    CombatTab = Window:Tab({ Title = "Combat", Icon = "sword" }),
+    StatsTab = Window:Tab({ Title = "Stats", Icon = "chart-no-axes-column" }),
+    FruitTab = Window:Tab({ Title = "Fruit", Icon = "flask-conical" }),
+    TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" }),
+    SeaEventTab = (World2 or World3) and Window:Tab({ Title = "Sea Event", Icon = "anchor" }) or nil,
+    SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" }),
+    CreditsTab = Window:Tab({ Title = "Credits", Icon = "info" }),
+}
+
+-- [[ LÓGICA CORE (SCRIPT MELHOR) ]]
+local Players = game:GetService("Players")
+local plr = Players.LocalPlayer
+local replicated = game:GetService("ReplicatedStorage")
+local vim1 = game:GetService("VirtualInputManager")
+
+_G.AutoFarm = false
+_G.SelectWeapon = "Melee"
+_G.AutoFarmBoss = false
+_G.SelectedBoss = BossList[1]
+
+-- Funções Otimizadas
+local function EquipWeapon(text)
+    if not text then return end
+    local tool = plr.Backpack:FindFirstChild(text) or plr.Character:FindFirstChild(text)
+    if tool and tool.Parent ~= plr.Character then
+        plr.Character.Humanoid:EquipTool(tool)
+    end
+end
+
+local function BringEnemy(pos)
+    for _, v in pairs(workspace.Enemies:GetChildren()) do
+        if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+            if (v.PrimaryPart.Position - pos).Magnitude <= 300 then
+                v.PrimaryPart.CFrame = CFrame.new(pos)
+                v.PrimaryPart.CanCollide = false
+                v.Humanoid.WalkSpeed = 0
+                v.Humanoid.JumpPower = 0
+            end
+        end
+    end
+end
+
+-- Loop de Farm (Substituindo a lógica ruim pela do script melhor)
+task.spawn(function()
+    while task.wait() do
+        if _G.AutoFarm or _G.AutoFarmBoss then
+            pcall(function()
+                local target = nil
+                if _G.AutoFarmBoss then
+                    target = workspace.Enemies:FindFirstChild(_G.SelectedBoss) or workspace.Bosses:FindFirstChild(_G.SelectedBoss)
+                else
+                    -- Lógica de Level Farm (Simplificada para integração)
+                    for _, v in pairs(workspace.Enemies:GetChildren()) do
+                        if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                            target = v
+                            break
+                        end
+                    end
+                end
+
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    EquipWeapon(_G.SelectWeapon)
+                    local targetCFrame = target.HumanoidRootPart.CFrame
+                    
+                    -- Noclip & Position (Lógica superior do script melhor)
+                    plr.Character.HumanoidRootPart.CFrame = targetCFrame * CFrame.new(0, 20, 0)
+                    BringEnemy(target.HumanoidRootPart.Position)
+                    
+                    -- Auto Click
+                    vim1:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    vim1:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                end
+            end)
+        end
+    end
+end)
+
+-- [[ INTERFACE - ABA MAIN ]]
+local MainSection = Tabs.MainTab:Section({ Title = "Auto Farm" })
+
+MainSection:Toggle({
+    Title = "Auto Farm Level",
+    Default = false,
+    Callback = function(Value) _G.AutoFarm = Value end
+})
+
+MainSection:Dropdown({
+    Title = "Select Weapon",
+    Items = {"Melee", "Sword", "Blox Fruit"},
+    Default = "Melee",
+    Callback = function(Value) _G.SelectWeapon = Value end
+})
+
+-- [[ BOSS FARM ]]
+local BossSection = Tabs.MainTab:Section({ Title = "Boss Farm" })
+
+BossSection:Dropdown({
+    Title = "Select Boss",
+    Items = BossList,
+    Default = BossList[1],
+    Callback = function(Value) _G.SelectedBoss = Value end
+})
+
+BossSection:Toggle({
+    Title = "Auto Farm Selected Boss",
+    Default = false,
+    Callback = function(Value) _G.AutoFarmBoss = Value end
+})
+
+-- [[ ABAS ESPECÍFICAS DE SEA ]]
+if World1 and Tabs.Sea1Tab then
+    local S1Section = Tabs.Sea1Tab:Section({ Title = "First Sea Exclusives" })
+    S1Section:Toggle({ Title = "Auto Saber Expert", Callback = function(v) _G.AutoSaber = v end })
+end
+
+if World2 and Tabs.Sea2Tab then
+    local S2Section = Tabs.Sea2Tab:Section({ Title = "Second Sea Exclusives" })
+    S2Section:Toggle({ Title = "Auto Factory", Callback = function(v) _G.AutoFactory = v end })
+end
+
+if World3 and Tabs.Sea3Tab then
+    local S3Section = Tabs.Sea3Tab:Section({ Title = "Third Sea Exclusives" })
+    S3Section:Toggle({ Title = "Auto Elite Hunter", Callback = function(v) _G.AutoElite = v end })
+end
+
+-- [[ AUTO STATS ]]
+local StatsSection = Tabs.StatsTab:Section({ Title = "Auto Stats" })
+local statPoints = {"Melee", "Defense", "Sword", "Gun", "Demon Fruit"}
+
+for _, stat in pairs(statPoints) do
+    StatsSection:Toggle({
+        Title = "Auto " .. stat,
+        Default = false,
+        Callback = function(Value) _G["AutoStat"..stat] = Value end
+    })
+end
+
+task.spawn(function()
+    while task.wait(1) do
+        for _, stat in pairs(statPoints) do
+            if _G["AutoStat"..stat] then
+                replicated.Remotes.CommF_:InvokeServer("AddPoint", stat == "Demon Fruit" and "Demon Fruit" or stat, 1)
+            end
+        end
+    end
+end)
+
+print("Relz Hub Fixed & Optimized Loaded!")
